@@ -1,0 +1,6 @@
+# Poly Haven models (CC0) for IGI's props: tools/modelpack.py
+# texture hash      mesh            texture         options
+0033483e88466508  drum_red.rcm    drum_red.png    up=z
+46a9b050e7a64cec  drum.rcm        drum.png        up=z tint=34564d
+d1458e155415e945  drum.rcm        drum.png        up=z tint
+963394e01b22c996  -               -

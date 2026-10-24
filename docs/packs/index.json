@@ -1,0 +1,10 @@
+{
+ "version": "cb85bd83d6c3",
+ "files": [
+  "models/polyhaven/drum.png",
+  "models/polyhaven/drum.rcm",
+  "models/polyhaven/drum_red.png",
+  "models/polyhaven/drum_red.rcm",
+  "models/polyhaven/models.txt"
+ ]
+}

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project I.G.I.</title>
+<style>
+  :root {
+    --bg: #070b08; --fg: #eef4ef; --muted: #9fb3a5; --faint: #6f8576;
+    --accent: #34b866; --accent-hi: #45cf79; --ball: #d23a2f;
+    --card: rgba(255, 255, 255, .055); --card-hi: rgba(255, 255, 255, .09); --line: rgba(255, 255, 255, .12);
+    --field: rgba(0, 0, 0, .28); --radius: 14px;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding: 16px; }
+  .credit { color: var(--muted); font-size: 13px; text-align: center; }
+  .credit a { color: var(--accent-hi); text-decoration: underline; text-underline-offset: 2px; }
+  .credit a:hover { color: var(--fg); }
+  label.link { color: var(--accent-hi); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+  label.link:hover { color: var(--fg); }
+  /* The 4:3 stage is centred. On viewports wide enough to fit a side-panel reference without crowding
+     the stage, 440px is reserved symmetrically (220 each side) so the panel sits in that gap and the
+     stage stays centred rather than off-set. On narrow viewports the panel is hidden and the stage uses
+     the full width. The .kbd-off body class (set when the player dismisses the panel) frees the space. */
+  #stage { position: relative; width: min(100%, calc((100vh - 72px) * 4 / 3)); aspect-ratio: 4 / 3; background: #000;
+    border-radius: 12px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, .55); }
+  @media (min-width: 1120px) {
+    body:not(.kbd-off) #stage { width: min(calc(100% - 440px), calc((100vh - 72px) * 4 / 3)); }
+  }
+  canvas { width: 100%; height: 100%; display: block; cursor: none; }
+  .hidden { display: none !important; }
+
+  /* the launcher: a floodlit pitch behind the menus */
+  #panel { position: absolute; inset: 0; overflow: auto; display: grid; place-items: center; padding: 28px;
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(255, 255, 255, .10), transparent 60%),
+      repeating-linear-gradient(90deg, rgba(255, 255, 255, .025) 0 9%, transparent 9% 18%),
+      radial-gradient(140% 120% at 50% 110%, #123d22 0%, #0b2414 45%, #060d08 100%); }
+  .view { width: min(100%, 560px); text-align: center; animation: rise .25s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  @media (prefers-reduced-motion: reduce) { .view { animation: none; } }
+
+  .brand { margin: 0 auto 10px; font-size: 34px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+  .tagline { margin: 0 0 26px; color: var(--muted); }
+  .small { font-size: 13px; color: var(--faint); }
+  p { margin: 8px 0; }
+
+  /* home: the big choice(s) */
+  .choices { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .choices.one { grid-template-columns: 1fr; max-width: 340px; margin: 0 auto; }
+  @media (max-width: 520px) { .choices { grid-template-columns: 1fr; } }
+  .choice { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 20px 18px; text-align: left;
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--fg); font: inherit;
+    cursor: pointer; transition: transform .12s ease, background .12s ease, border-color .12s ease; }
+  .choice:hover { transform: translateY(-2px); background: var(--card-hi); border-color: rgba(255, 255, 255, .22); }
+  .choice:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent-hi); outline-offset: 2px; }
+  .choice svg { width: 30px; height: 30px; color: var(--accent); }
+  .choice b { font-size: 18px; }
+  .choice span { color: var(--muted); font-size: 14px; }
+
+  /* buttons and fields */
+  button { font: inherit; cursor: pointer; border-radius: 10px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 20px; border: 0;
+    background: var(--accent); color: #04110a; font-weight: 700; transition: background .12s ease; }
+  .btn:hover { background: var(--accent-hi); }
+  .btn:disabled { opacity: .45; cursor: default; background: var(--accent); }
+  .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); font-weight: 600; }
+  .btn.ghost:hover { background: var(--card-hi); }
+  .back { position: absolute; top: 16px; left: 16px; padding: 6px 12px; border: 0; background: transparent; color: var(--muted); }
+  .back:hover { color: var(--fg); }
+  input, select { font: inherit; color: var(--fg); background: var(--field); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; min-width: 0; }
+  input::placeholder { color: var(--faint); }
+
+  .row { display: flex; gap: 10px; }
+
+  @keyframes spin { to { transform: rotate(1turn); } }
+
+  /* loading */
+  progress { width: min(100%, 320px); height: 8px; margin-top: 14px; appearance: none; border: 0; border-radius: 99px;
+    overflow: hidden; background: var(--field); }
+  progress::-webkit-progress-bar { background: var(--field); }
+  progress::-webkit-progress-value { background: var(--accent); border-radius: 99px; }
+  progress::-moz-progress-bar { background: var(--accent); }
+  #status { font-variant-numeric: tabular-nums; color: var(--muted); max-width: 52ch; margin-inline: auto; }
+
+  /* fullscreen: the stage fills the screen and the game letterboxes itself inside the canvas */
+  #stage:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; box-shadow: none; }
+  #stage:-webkit-full-screen { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; }
+  #fs { position: absolute; right: 12px; bottom: 12px; z-index: 2; width: 40px; height: 40px; display: grid; place-items: center;
+    padding: 0; border: 1px solid rgba(255, 255, 255, .18); border-radius: 10px; background: rgba(0, 0, 0, .55); color: #fff;
+    backdrop-filter: blur(4px); opacity: 0; transition: opacity .25s ease; }
+  #fs svg { width: 20px; height: 20px; }
+  #stage.awake #fs, #fs:focus-visible { opacity: 1; }
+  #fs:hover { background: rgba(0, 0, 0, .75); }
+  #fstip { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 2; padding: 6px 14px; border-radius: 99px;
+    background: rgba(0, 0, 0, .65); color: #fff; font-size: 13px; pointer-events: none; transition: opacity .4s ease; }
+  kbd { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 6px; border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, .25); background: rgba(255, 255, 255, .08); }
+
+  /* keyboard cheat sheet: shows beside the stage when the viewport has room, because in-game prompts
+     use controller glyphs (triangle/circle/×/square, L1, R1) that keyboard players would otherwise have
+     to guess at. Hidden in fullscreen, on narrow viewports and by choice (remembered in localStorage). */
+  #kbd { position: fixed; top: 50%; right: 14px; transform: translateY(-50%); z-index: 2;
+    width: 204px; max-height: calc(100vh - 24px); overflow: auto;
+    padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: rgba(10, 18, 12, .78); color: var(--fg); font-size: 13px; line-height: 1.45;
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .5); display: none; }
+  @media (min-width: 1120px) {
+    body:not(.kbd-off) #stage:not(:fullscreen) ~ #kbd { display: block; }
+    body.kbd-off #stage:not(:fullscreen) ~ #kbd-show { display: grid; }
+  }
+  #kbd .kbd-head { display: flex; justify-content: space-between; align-items: center;
+    margin: -4px 0 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  #kbd .kbd-head b { font-size: 13px; letter-spacing: .02em; }
+  #kbd-close { background: transparent; border: 0; color: var(--muted); font-size: 20px; line-height: 1;
+    padding: 0 4px; cursor: pointer; border-radius: 6px; }
+  #kbd-close:hover { color: var(--fg); background: var(--card-hi); }
+  #kbd h3 { font: 600 11px/1.4 ui-sans-serif, system-ui, sans-serif; text-transform: uppercase;
+    letter-spacing: .08em; color: var(--muted); margin: 12px 0 4px; }
+  #kbd h3:first-of-type { margin-top: 0; }
+  #kbd .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+    padding: 4px 0; }
+  #kbd .label { color: var(--muted); font-size: 12.5px; }
+  #kbd .keys { display: flex; flex-wrap: wrap; gap: 3px; justify-content: flex-end;
+    color: var(--muted); font-size: 11.5px; }
+  #kbd kbd { font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 2px 6px;
+    border-radius: 5px; border: 1px solid rgba(255, 255, 255, .22); background: rgba(255, 255, 255, .07);
+    color: var(--fg); white-space: nowrap; }
+  #kbd .note { color: var(--faint); font-size: 11.5px; margin: 4px 0 0; }
+  #kbd-show { position: fixed; top: 50%; right: 16px; transform: translateY(-50%); z-index: 2;
+    width: 38px; height: 38px; place-items: center; padding: 0;
+    background: rgba(10, 18, 12, .78); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 10px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); display: none; }
+  #kbd-show:hover { color: var(--fg); background: rgba(10, 18, 12, .92); }
+  #kbd-show svg { width: 18px; height: 18px; }
+</style>
+
+</head>
+<body>
+<main>
+  <div id="stage">
+    <canvas id="canvas" width="1024" height="768" tabindex="0"></canvas>
+    <button id="fs" title="Fullscreen (Alt+Enter)" aria-label="Toggle fullscreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path id="fs-icon" d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <div id="fstip" class="hidden">Press <kbd>Alt</kbd> + <kbd>Enter</kbd> for fullscreen</div>
+    <div id="panel">
+
+      <!-- loading: browser checks, the first-visit download, errors -->
+      <section id="view-loading" class="view">
+        <h1 class="brand">Project I.G.I.</h1>
+        <p id="status">Checking your browser…</p>
+        <progress id="progress" class="hidden" max="1" value="0"></progress>
+        <div>
+          <label id="pick" class="btn hidden" style="margin-top:16px">Choose game folder
+            <input id="folder" type="file" webkitdirectory multiple hidden>
+          </label>
+        </div>
+        <p id="help" class="hidden small">Pick your IGI folder: the installed one that holds <b>IGI.exe</b> (the disc's <b>pc</b> folder), with
+          <b>YMBE.AFP</b>, <b>ANYS.AFP</b> and <b>MPZM.AFP</b> from the root of the disc copied next to IGI.exe. It is copied into this
+          browser's private storage once and never leaves your computer.</p>
+      </section>
+
+      <!-- home -->
+      <section id="view-home" class="view hidden">
+        <h1 class="brand">Project I.G.I.</h1>
+        <p class="tagline">I'm Going In.</p>
+        <div class="choices one">
+          <button id="play" class="choice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="8"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/></svg>
+            <b>Play</b>
+            <span>Your saves stay in this browser.</span>
+          </button>
+        </div>
+        <p class="small" style="margin-top:22px">Mouse to aim (click the game to capture the pointer), keyboard to move: see the panel.<br>
+          Fullscreen: <kbd>Alt</kbd> + <kbd>Enter</kbd> (<kbd>⌥</kbd> + <kbd>Enter</kbd> on Mac) or the button in the corner.</p>
+        <p class="small"><a href="#" id="reset">Use a different game folder</a> &middot;
+          <label class="link" title="A texture pack (PNGs named by texture hash) or a model pack (a folder with models.txt), made with the tools in the project's repository">Add a texture or model pack
+            <input id="pack" type="file" webkitdirectory multiple hidden></label></p>
+        <p id="pack-status" class="small hidden"></p>
+      </section>
+
+    </div>
+  </div>
+  <aside id="kbd" aria-label="Keyboard controls">
+    <div class="kbd-head"><b>Keyboard controls</b>
+      <button id="kbd-close" type="button" aria-label="Hide keyboard controls" title="Hide">×</button>
+    </div>
+    <h3>Moving</h3>
+    <div class="row"><span class="label">Forward, back, turn</span><div class="keys"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></div></div>
+    <div class="row"><span class="label">Look</span><div class="keys">Mouse</div></div>
+    <div class="row"><span class="label">Walk / run</span><div class="keys"><kbd>W</kbd></div></div>
+    <div class="row"><span class="label">Crouch</span><div class="keys">Right <kbd>Ctrl</kbd></div></div>
+    <div class="row"><span class="label">Jump</span><div class="keys">Numpad <kbd>0</kbd></div></div>
+    <h3>Fighting</h3>
+    <div class="row"><span class="label">Fire</span><div class="keys">Left button</div></div>
+    <div class="row"><span class="label">Aim (hold)</span><div class="keys">Right button</div></div>
+    <div class="row"><span class="label">Dive in slow motion</span><div class="keys">Middle or thumb button</div></div>
+    <div class="row"><span class="label">Next / previous weapon</span><div class="keys">Wheel</div></div>
+    <div class="row"><span class="label">Weapon groups</span><div class="keys"><kbd>1</kbd>–<kbd>9</kbd></div></div>
+    <div class="row"><span class="label">Reload</span><div class="keys"><kbd>Enter</kbd></div></div>
+    <h3>Other</h3>
+    <div class="row"><span class="label">Use / activate</span><div class="keys">Right <kbd>Shift</kbd></div></div>
+    <div class="row"><span class="label">Binoculars</span><div class="keys"><kbd>Space</kbd></div></div>
+    <div class="row"><span class="label">Map</span><div class="keys"><kbd>C</kbd></div></div>
+    <div class="row"><span class="label">Quick save / load</span><div class="keys"><kbd>F5</kbd> / <kbd>F9</kbd></div></div>
+    <div class="row"><span class="label">Menu, skip cutscene</span><div class="keys"><kbd>Esc</kbd></div></div>
+    <div class="row"><span class="label">Fullscreen</span><div class="keys"><kbd>Alt</kbd>+<kbd>Enter</kbd></div></div>
+  </aside>
+  <p class="credit">Project I.G.I. &copy; Innerloop Studios / Eidos Interactive, not affiliated with this project &middot; Runs your own copy of the game &middot; Built on <a href="https://github.com/Dhaiwat10/cricket07-browser" target="_blank" rel="noopener">cricket07-browser</a></p>
+  <button id="kbd-show" type="button" aria-label="Show keyboard controls" title="Show keyboard controls">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="2.5" y="6" width="19" height="12" rx="2"/>
+      <path d="M6 10h.01M9 10h.01M12 10h.01M15 10h.01M18 10h.01M7 14h10"/>
+    </svg>
+  </button>
+</main>
+<script src="coi.js"></script>
+<script src="loader.js"></script>
+</body>
+</html>
