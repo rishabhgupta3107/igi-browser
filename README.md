@@ -1,11 +1,11 @@
 # Project I.G.I. in your browser and on your desktop
 
-Play your own copy of **Project I.G.I.: I'm Going In** (2000) in a web browser, or as an app on a Mac or a
+Play **Project I.G.I.: I'm Going In** (2000) in a web browser, or as an app on a Mac or a
 Windows PC. It's the original game, translated from its Windows program into code that runs anywhere, with
 no emulator. On top of it: widescreen, sharper graphics, controller support, aiming, a Max Payne-style dive
 in slow motion, and cheat codes.
 
-You need the game itself: this project doesn't include any of its files.
+Free, with no ads. The game downloads once on the first launch (513 MB), with Square Enix's permission.
 
 ![A mission in widescreen](screenshots/mission.jpg)
 
@@ -47,9 +47,12 @@ If macOS says the app "is damaged", open Terminal and run
 
 ## First run
 
-The first time, the game asks for your IGI folder: the one with `IGI.exe` in it. If you installed from the CD,
-copy `YMBE.AFP`, `ANYS.AFP` and `MPZM.AFP` from the CD's top folder into that folder first. The files are copied
-into the app's (or the browser's) own storage once; next time it starts straight away.
+The first time, click **Download Project I.G.I.** and keep the internet on: it downloads once (513 MB, a minute
+or two on a fast connection). If the download stops, open the page again and it carries on where it left off.
+After that the game starts straight away, even offline.
+
+Have your own copy? Choose the disc image (the `.iso` file, or drop it on the window), the disc itself, or the
+folder you installed it to, instead of downloading.
 
 Your saves stay on your computer, in that storage: the browser's saves are separate from the app's.
 
@@ -94,9 +97,8 @@ Updates…**): download it and replace the old app. Your game files and saves st
 
 ## Privacy
 
-The website counts visits and games started with [GoatCounter](https://www.goatcounter.com): no cookies, nothing
-that identifies you. The apps only ask GitHub whether there's a newer version. Your game files never leave your
-computer.
+The website uses no cookies and doesn't track you. The apps only ask GitHub whether there's a newer version. Your
+saves never leave your computer.
 
 ## Credits
 
@@ -112,6 +114,7 @@ to translate a Windows game to run in a browser, and in the spirit of
 
 ## Legal
 
-Project I.G.I. was made by Innerloop Studios and published by Eidos Interactive; its name is a trademark of its
-current owner. This is a fan project, not affiliated with or endorsed by them. It doesn't include or distribute
-the game's files: you play with your own copy.
+Project I.G.I. © Square Enix. The game was made by Innerloop Studios and published by Eidos Interactive (now part
+of Square Enix); its name is a trademark of its owner. This is an unofficial fan project: it is not sponsored or
+endorsed by Square Enix, Innerloop Studios or Eidos Interactive, and it isn't an official Square Enix product or
+partnership.

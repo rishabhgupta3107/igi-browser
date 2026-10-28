@@ -1,4 +1,4 @@
-// Project I.G.I. in the browser: copies the player's own game folder into OPFS (once; it never leaves the
+// Project I.G.I. in the browser: copies the player's own game (disc image, disc or folder) into OPFS (once; it never leaves the
 // computer), starts the recompiled build (build/recomp.js), replays its frames with WebGPU and feeds it
 // input and audio.
 //
@@ -60,16 +60,67 @@ async function fileHandle(dir, relPath, create) {
   return dir.getFileHandle(parts[parts.length - 1], { create });
 }
 
-async function importFromPicker(fileList) {
+// IGI's disc check looks for three one-byte files from the CD's root (host/profile.h); they sit next to IGI.exe
+const CD_FILES = ['ymbe.afp', 'anys.afp', 'mpzm.afp'];
+
+// A folder the player picks: the installed game (IGI.exe at its top) or the disc itself (the game in pc/)
+function folderFiles(fileList) {
   // the whole folder, minus its own name: <picked>/a/b.dat -> a/b.dat
-  const list = [...fileList].map((f) => ({ f, dest: f.webkitRelativePath.split('/').slice(1).join('/') }))
-    .filter((e) => e.dest);
-  if (!list.some((e) => e.dest.toLowerCase().endsWith('.exe'))) throw new Error('No IGI.exe in that folder.');
-  // IGI's disc check looks for three one-byte files from the CD's root (host/profile.h); they can sit next to IGI.exe
+  return [...fileList].map((f) => ({ f, dest: f.webkitRelativePath.split('/').slice(1).join('/') })).filter((e) => e.dest);
+}
+
+// The disc image (.iso): ISO 9660, read in place, with Joliet's long names when the image has them. Each file
+// is a slice of the image, so nothing is held in memory.
+async function isoFiles(file) {
+  const SEC = 2048;
+  const bytes = async (off, n) => new Uint8Array(await file.slice(off, off + n).arrayBuffer());
+  const u32 = (b, at) => b[at] | b[at + 1] << 8 | b[at + 2] << 16 | (b[at + 3] << 24 >>> 0);
+  let root = null, joliet = false;
+  for (let s = 16; s < 32; s++) {   // volume descriptors: 1 primary, 2 supplementary (Joliet), 255 the end
+    const d = await bytes(s * SEC, SEC);
+    if (String.fromCharCode(...d.subarray(1, 6)) !== 'CD001' || d[0] === 255) break;
+    const isJoliet = d[0] === 2 && d[88] === 0x25 && d[89] === 0x2f && [0x40, 0x43, 0x45].includes(d[90]);
+    if ((d[0] === 1 && !root) || isJoliet) { root = { lba: u32(d, 158), size: u32(d, 166) }; joliet = isJoliet; }
+  }
+  if (!root) throw new Error('That file is not a CD image (.iso).');
+  const name = (b) => {
+    if (joliet) { let s = ''; for (let i = 0; i + 1 < b.length; i += 2) s += String.fromCharCode(b[i] << 8 | b[i + 1]); return s.replace(/;\d+$/, ''); }
+    return String.fromCharCode(...b).replace(/;\d+$/, '').replace(/\.$/, '').toLowerCase();
+  };
+  const list = [], seen = new Set();
+  const walk = async (dir, prefix) => {
+    if (seen.has(dir.lba) || seen.size > 4096) return;
+    seen.add(dir.lba);
+    const d = await bytes(dir.lba * SEC, dir.size);
+    for (let at = 0; at < d.length;) {
+      const len = d[at];
+      if (!len) { at = (Math.floor(at / SEC) + 1) * SEC; continue; }   // records don't cross a sector
+      const n = d[at + 32], raw = d.subarray(at + 33, at + 33 + n);
+      const entry = { lba: u32(d, at + 2), size: u32(d, at + 10) };
+      if (!(n === 1 && raw[0] <= 1)) {   // not . or ..
+        const path = prefix + name(raw);
+        if (d[at + 25] & 2) await walk(entry, path + '/');
+        else list.push({ f: file.slice(entry.lba * SEC, entry.lba * SEC + entry.size), dest: path });
+      }
+      at += len;
+    }
+  };
+  await walk(root, '');
+  return list;
+}
+
+async function importFiles(list) {
+  // the disc's layout: the game in pc/, the check files at the root
+  const lower = (e) => e.dest.toLowerCase();
+  if (list.some((e) => lower(e) === 'pc/igi.exe'))
+    list = list.filter((e) => lower(e).startsWith('pc/')).map((e) => ({ f: e.f, dest: e.dest.slice(3) }))
+      .concat(list.filter((e) => CD_FILES.includes(lower(e))));
+  if (!list.some((e) => lower(e).endsWith('.exe')))
+    throw new Error('No IGI.exe there: choose the IGI disc image (.iso), the disc itself, or your installed IGI folder.');
   const names = new Set(list.map((e) => e.dest.split('/').pop().toLowerCase()));
-  const cd = ['ymbe.afp', 'anys.afp', 'mpzm.afp'].filter((n) => !names.has(n));
+  const cd = CD_FILES.filter((n) => !names.has(n));
   if (cd.length) throw new Error(`Copy ${cd.map((n) => n.toUpperCase()).join(', ')} from the root of the IGI disc into that folder, ` +
-    'next to IGI.exe: the game checks for them.');
+    'next to IGI.exe: the game checks for them. Or choose the disc image (.iso) instead.');
   const root = await navigator.storage.getDirectory();
   try { await root.removeEntry(OPFS_DIR, { recursive: true }); } catch {}
   await navigator.storage.persist?.();
@@ -89,6 +140,82 @@ async function importFromPicker(fileList) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sig));
   await writeMarker([...new Uint8Array(digest)].slice(0, 6).map((b) => b.toString(16).padStart(2, '0')).join(''));
   $('progress').classList.add('hidden');
+}
+
+// ------------------------------------------------------------------ a game the site hosts
+// Off unless the site was built with one (deploy_web.sh GAME=<disc image>), which is only for a game the site
+// may share: one whose rights holder agreed in writing, or a freely redistributable demo. The image sits beside
+// the page in parts (tools/gameparts.py), listed in the file <meta name="rc-game"> names:
+//   { version, name, size, parts: [{ file, size, sha256 }] }
+// The parts are downloaded into OPFS (DL_DIR, resumed part by part after a reload), each checked, then the image
+// is installed as a picked one would be and the download deleted.
+const DL_DIR = 'rcdownload';
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+
+async function hostedGame() {
+  const url = document.querySelector('meta[name="rc-game"]')?.content;
+  if (!url) return null;
+  try {
+    const abs = new URL(url, location.href);
+    const r = await fetch(abs, { cache: 'no-cache' });
+    if (!r.ok) return null;
+    return { ...(await r.json()), base: new URL('.', abs).href };
+  } catch { return null; }
+}
+
+async function fetchPart(url, size, progress) {
+  const r = await fetch(url);
+  if (!r.ok || !r.body) throw new Error(`Could not download ${url.split('/').pop()} (${r.status}). Check your connection and reload the page: it carries on where it stopped.`);
+  const buf = new Uint8Array(size);
+  let n = 0;
+  for (const reader = r.body.getReader(); ;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (n + value.length > size) throw new Error('A part of the download is larger than expected: reload the page to try again.');
+    buf.set(value, n);
+    n += value.length;
+    progress(n);
+  }
+  if (n !== size) throw new Error('The download stopped early. Check your connection and reload the page: it carries on where it stopped.');
+  return buf;
+}
+
+async function downloadGame(game) {
+  const root = await navigator.storage.getDirectory();
+  await navigator.storage.persist?.();
+  let dl = await root.getDirectoryHandle(DL_DIR, { create: true });
+  let state = null;
+  try { state = JSON.parse(await (await (await dl.getFileHandle('state.json')).getFile()).text()); } catch {}
+  if (state?.version !== game.version) {   // a download of another version starts over
+    await root.removeEntry(DL_DIR, { recursive: true });
+    dl = await root.getDirectoryHandle(DL_DIR, { create: true });
+    state = { version: game.version, done: 0 };
+  }
+  const image = await dl.getFileHandle('image.iso', { create: true });
+  let at = game.parts.slice(0, state.done).reduce((s, p) => s + p.size, 0);
+  $('progress').classList.remove('hidden');
+  for (let i = state.done; i < game.parts.length; i++) {
+    const p = game.parts[i];
+    const shown = (n) => {
+      status(`Downloading the game: ${mb(at + n)} of ${mb(game.size)} MB`);
+      $('progress').value = (at + n) / game.size;
+    };
+    shown(0);
+    const buf = await fetchPart(game.base + p.file, p.size, shown);
+    if (hex(await crypto.subtle.digest('SHA-256', buf)) !== p.sha256)
+      throw new Error('Part of the download arrived damaged. Reload the page to try again.');
+    const w = await image.createWritable({ keepExistingData: true });
+    await w.write({ type: 'write', position: at, data: buf });
+    await w.close();
+    at += p.size;
+    state.done = i + 1;
+    const s = await (await dl.getFileHandle('state.json', { create: true })).createWritable();
+    await s.write(JSON.stringify(state));
+    await s.close();
+  }
+  status('Installing the game…');
+  await importFiles(await isoFiles(await image.getFile()));
+  await root.removeEntry(DL_DIR, { recursive: true });
 }
 
 // ------------------------------------------------------------------ texture and model packs
@@ -361,18 +488,43 @@ async function boot() {
     if (params.has('autoplay')) $('play').click();
   };
   $('play').onclick = () => { count('play', true); run().catch(fail); };
-  $('folder').onchange = async (e) => {
+  const install = async (files) => {
     $('pick').classList.add('hidden');
-    try { await importFromPicker(e.target.files); count('installed', true); ready(); }
+    try { await importFiles(await files()); count('installed', true); ready(); }
     catch (err) { status(err.message); $('pick').classList.remove('hidden'); }
   };
+  $('folder').onchange = (e) => { const l = e.target.files; e.target.value = ''; install(async () => folderFiles(l)); };
+  $('iso').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) install(() => isoFiles(f)); };
+  // or the disc image dropped on the page
+  addEventListener('dragover', (e) => { if (!$('pick').classList.contains('hidden')) e.preventDefault(); });
+  addEventListener('drop', (e) => {
+    if ($('pick').classList.contains('hidden')) return;
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if (f) install(() => isoFiles(f));
+  });
+  // a game the site hosts comes first, the player's own copy second
+  const game = await hostedGame();
+  if (game) {
+    $('download').textContent = `Download ${game.name || 'the game'} (${mb(game.size)} MB)`;
+    $('download').classList.remove('hidden');
+    $('iso-btn').classList.add('ghost');
+    $('own-copy').classList.add('hidden');   // the footer's "runs your own copy"
+    $('help').textContent = 'Downloads once, then plays straight away, even offline. Or use your own copy: the disc image ' +
+      '(.iso, or drop it on this page), the disc itself, or the folder you installed it to.';
+    $('download').onclick = async () => {
+      $('pick').classList.add('hidden');
+      try { await downloadGame(game); count('downloaded', true); ready(); }
+      catch (err) { status(err.message); $('pick').classList.remove('hidden'); $('progress').classList.add('hidden'); }
+    };
+  }
   const showPicker = (msg) => {
     status(msg);
     $('pick').classList.remove('hidden');
     $('help').classList.remove('hidden');
   };
 
-  $('reset').onclick = (e) => { e.preventDefault(); show('loading'); showPicker('Choose your IGI folder.'); };
+  $('reset').onclick = (e) => { e.preventDefault(); show('loading'); showPicker(game ? 'Download the game, or use your own copy.' : 'Choose your copy of IGI.'); };
   $('pack').onchange = async (e) => {
     const s = $('pack-status');
     s.classList.remove('hidden');
@@ -380,7 +532,8 @@ async function boot() {
     e.target.value = '';
   };
   if (!(await readMarker())) {
-    showPicker('Choose your IGI folder to start.');
+    showPicker(game ? 'Download the game to start, or use your own copy.' : 'Choose your copy of IGI to start.');
+    if (game && params.has('autoplay')) $('download').click();
     return;
   }
   ready();

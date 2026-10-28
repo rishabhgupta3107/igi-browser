@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="rc-game" content="game/index.json">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Project I.G.I.</title>
 <style>
@@ -158,14 +159,18 @@
         <h1 class="brand">Project I.G.I.</h1>
         <p id="status">Checking your browser…</p>
         <progress id="progress" class="hidden" max="1" value="0"></progress>
-        <div>
-          <label id="pick" class="btn hidden" style="margin-top:16px">Choose game folder
+        <div id="pick" class="hidden" style="margin-top:16px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap">
+          <button id="download" class="btn hidden" type="button">Download the game</button>
+          <label id="iso-btn" class="btn">Choose the disc image (.iso)
+            <input id="iso" type="file" accept=".iso,.bin,.img" hidden>
+          </label>
+          <label class="btn ghost">Choose a folder
             <input id="folder" type="file" webkitdirectory multiple hidden>
           </label>
         </div>
-        <p id="help" class="hidden small">Pick your IGI folder: the installed one that holds <b>IGI.exe</b> (the disc's <b>pc</b> folder), with
-          <b>YMBE.AFP</b>, <b>ANYS.AFP</b> and <b>MPZM.AFP</b> from the root of the disc copied next to IGI.exe. It is copied into this
-          browser's private storage once and never leaves your computer.</p>
+        <p id="help" class="hidden small">Your copy of IGI: the disc image (<b>.iso</b>, or drop it on this page), the disc itself, or the
+          folder you installed it to. Nothing to unpack or set up. It is copied into this browser's private storage once and never
+          leaves your computer.</p>
       </section>
 
       <!-- home -->
@@ -182,7 +187,7 @@
         </div>
         <p class="small" style="margin-top:22px">Mouse to aim (click the game to capture the pointer), keyboard to move: see the panel.<br>
           Fullscreen: <kbd>Alt</kbd> + <kbd>Enter</kbd> (<kbd>⌥</kbd> + <kbd>Enter</kbd> on Mac) or the button in the corner.</p>
-        <p class="small"><a href="#" id="reset">Use a different game folder</a> &middot;
+        <p class="small"><a href="#" id="reset">Use a different copy of the game</a> &middot;
           <label class="link" title="A texture pack (PNGs named by texture hash) or a model pack (a folder with models.txt), made with the tools in the project's repository">Add a texture or model pack
             <input id="pack" type="file" webkitdirectory multiple hidden></label></p>
         <p id="pack-status" class="small hidden"></p>
@@ -215,7 +220,7 @@
     <div class="row"><span class="label">Menu, skip cutscene</span><div class="keys"><kbd>Esc</kbd></div></div>
     <div class="row"><span class="label">Fullscreen</span><div class="keys"><kbd>Alt</kbd>+<kbd>Enter</kbd></div></div>
   </aside>
-  <p class="credit">Project I.G.I. &copy; Innerloop Studios / Eidos Interactive, not affiliated with this project &middot; Runs your own copy of the game &middot; Built on <a href="https://github.com/Dhaiwat10/cricket07-browser" target="_blank" rel="noopener">cricket07-browser</a></p>
+  <p class="credit">Project I.G.I. &copy; Square Enix, made by Innerloop Studios, published by Eidos Interactive &middot; An unofficial fan project, not an official Square Enix product or partnership <span id="own-copy">&middot; Runs your own copy of the game </span>&middot; Built on <a href="https://github.com/Dhaiwat10/cricket07-browser" target="_blank" rel="noopener">cricket07-browser</a></p>
   <button id="kbd-show" type="button" aria-label="Show keyboard controls" title="Show keyboard controls">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <rect x="2.5" y="6" width="19" height="12" rx="2"/>
