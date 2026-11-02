@@ -47,8 +47,8 @@ If macOS says the app "is damaged", open Terminal and run
 
 ## First run
 
-The first time, click **Download Project I.G.I.** and keep the internet on: it downloads once (513 MB, a minute
-or two on a fast connection). If the download stops, open the page again and it carries on where it left off.
+The first time, click **Play now** and keep the internet on: the game downloads once (513 MB, a minute or two on
+a fast connection) and starts by itself. If the download stops, open the page again and it carries on where it left off.
 After that the game starts straight away, even offline.
 
 Have your own copy? Choose the disc image (the `.iso` file, or drop it on the window), the disc itself, or the

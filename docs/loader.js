@@ -152,15 +152,17 @@ async function importFiles(list) {
 const DL_DIR = 'rcdownload';
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
+// null when the site hosts no game; { unreachable: host } when it does but its list can't be fetched (a network
+// that blocks the host, or the host down), so the page can say so instead of only offering the player's own copy
 async function hostedGame() {
   const url = document.querySelector('meta[name="rc-game"]')?.content;
   if (!url) return null;
+  const abs = new URL(url, location.href);
   try {
-    const abs = new URL(url, location.href);
     const r = await fetch(abs, { cache: 'no-cache' });
-    if (!r.ok) return null;
-    return { ...(await r.json()), base: new URL('.', abs).href };
-  } catch { return null; }
+    if (r.ok) return { ...(await r.json()), base: new URL('.', abs).href };
+  } catch {}
+  return { unreachable: abs.host };
 }
 
 async function fetchPart(url, size, progress) {
@@ -503,28 +505,33 @@ async function boot() {
     const f = e.dataTransfer.files[0];
     if (f) install(() => isoFiles(f));
   });
-  // a game the site hosts comes first, the player's own copy second
-  const game = await hostedGame();
+  // a game the site hosts comes first: Play downloads it once and starts it; the player's own copy second
+  const hosted = await hostedGame();
+  const game = hosted && !hosted.unreachable ? hosted : null;
   if (game) {
-    $('download').textContent = `Download ${game.name || 'the game'} (${mb(game.size)} MB)`;
+    $('download').textContent = 'Play now';
     $('download').classList.remove('hidden');
     $('iso-btn').classList.add('ghost');
     $('own-copy').classList.add('hidden');   // the footer's "runs your own copy"
-    $('help').textContent = 'Downloads once, then plays straight away, even offline. Or use your own copy: the disc image ' +
-      '(.iso, or drop it on this page), the disc itself, or the folder you installed it to.';
+    $('help').textContent = `The first time, the game downloads (${mb(game.size)} MB, a minute or two), then it starts ` +
+      'straight away on every visit, even offline. Have your own copy? Choose the disc image (.iso, or drop it on this ' +
+      'page), the disc itself, or the folder you installed it to.';
     $('download').onclick = async () => {
       $('pick').classList.add('hidden');
-      try { await downloadGame(game); count('downloaded', true); ready(); }
+      try { await downloadGame(game); count('downloaded', true); ready(); $('play').click(); }
       catch (err) { status(err.message); $('pick').classList.remove('hidden'); $('progress').classList.add('hidden'); }
     };
   }
+  const unreachable = hosted?.unreachable ? `This network can't reach the game's download (${hosted.unreachable}): ` +
+    'work and school networks sometimes block it. Try another network, such as your phone\'s hotspot, or use your own copy.' : null;
   const showPicker = (msg) => {
     status(msg);
     $('pick').classList.remove('hidden');
     $('help').classList.remove('hidden');
   };
 
-  $('reset').onclick = (e) => { e.preventDefault(); show('loading'); showPicker(game ? 'Download the game, or use your own copy.' : 'Choose your copy of IGI.'); };
+  const welcome = game ? 'Nothing to install: click Play now.' : unreachable ?? 'Choose your copy of IGI to start.';
+  $('reset').onclick = (e) => { e.preventDefault(); show('loading'); showPicker(game ? 'Download the game again, or use your own copy.' : unreachable ?? 'Choose your copy of IGI.'); };
   $('pack').onchange = async (e) => {
     const s = $('pack-status');
     s.classList.remove('hidden');
@@ -532,7 +539,7 @@ async function boot() {
     e.target.value = '';
   };
   if (!(await readMarker())) {
-    showPicker(game ? 'Download the game to start, or use your own copy.' : 'Choose your copy of IGI to start.');
+    showPicker(welcome);
     if (game && params.has('autoplay')) $('download').click();
     return;
   }
